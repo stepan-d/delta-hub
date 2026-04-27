@@ -1,0 +1,154 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  userId          Int       @id @default(autoincrement()) @map("user_id")
+  username        String    @unique @db.VarChar(50)
+  email           String    @unique @db.VarChar(100)
+  passwordHash    String    @map("password_hash") @db.VarChar(255)
+  role            String    @default("User") @db.VarChar(20)
+  schoolYear      Int?      @map("school_year") @db.SmallInt
+  favoriteSubject String?   @map("favorite_subject") @db.VarChar(100)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  memes        Meme[]
+  memeLikes    MemeLike[]
+  memeComments MemeComment[]
+  userReports  UserReport[]
+  auditLogs    AuditLog[]
+
+  @@index([role])
+  @@index([schoolYear])
+  @@map("users")
+}
+
+model School {
+  schoolId Int     @id @default(autoincrement()) @map("school_id")
+  name     String  @db.VarChar(150)
+  location String? @db.VarChar(150)
+
+  @@map("schools")
+}
+
+model MemeCategory {
+  categoryId  Int     @id @default(autoincrement()) @map("category_id")
+  name        String  @unique @db.VarChar(50)
+  description String?
+
+  memes Meme[]
+
+  @@map("meme_categories")
+}
+
+model Meme {
+  memeId     Int          @id @default(autoincrement()) @map("meme_id")
+  userId     Int          @map("user_id")
+  categoryId Int?         @map("category_id")
+  title      String?      @db.VarChar(200)
+  imageUrl   String       @map("image_url") @db.VarChar(500)
+  tags       Json         @default("{}")
+  likeCount  Int          @default(0) @map("like_count")
+  createdAt  DateTime     @default(now()) @map("created_at") @db.Timestamptz
+
+  user         User          @relation(fields: [userId], references: [userId])
+  category     MemeCategory? @relation(fields: [categoryId], references: [categoryId])
+  memeLikes    MemeLike[]
+  memeComments MemeComment[]
+  memeTags     MemeTag[]
+  userReports  UserReport[]
+
+  @@index([userId])
+  @@index([categoryId])
+  @@index([createdAt])
+  // GIN index na tags je potřeba přidat ručně v migraci
+  @@map("memes")
+}
+
+model MemeLike {
+  memeId    Int      @map("meme_id")
+  userId    Int      @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  meme Meme @relation(fields: [memeId], references: [memeId])
+  user User @relation(fields: [userId], references: [userId])
+
+  @@id([memeId, userId])
+  @@index([memeId])
+  @@index([userId])
+  @@map("meme_likes")
+}
+
+model MemeComment {
+  commentId Int      @id @default(autoincrement()) @map("comment_id")
+  memeId    Int      @map("meme_id")
+  userId    Int      @map("user_id")
+  text      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  meme Meme @relation(fields: [memeId], references: [memeId])
+  user User @relation(fields: [userId], references: [userId])
+
+  @@index([memeId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("meme_comments")
+}
+
+model MemeTag {
+  tagId    Int    @id @default(autoincrement()) @map("tag_id")
+  memeId   Int    @map("meme_id")
+  tagName  String @map("tag_name") @db.VarChar(50)
+  weight   Int    @default(1)
+
+  meme Meme @relation(fields: [memeId], references: [memeId])
+
+  @@index([memeId])
+  @@index([tagName])
+  @@map("meme_tags")
+}
+
+model UserReport {
+  reportId   Int      @id @default(autoincrement()) @map("report_id")
+  memeId     Int      @map("meme_id")
+  reporterId Int      @map("reporter_id")
+  reason     String
+  status     String   @default("pending") @db.VarChar(30)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  meme     Meme @relation(fields: [memeId], references: [memeId])
+  reporter User @relation(fields: [reporterId], references: [userId])
+
+  @@index([memeId])
+  @@index([reporterId])
+  @@index([status])
+  @@map("user_reports")
+}
+
+model SchoolEvent {
+  eventId     Int      @id @default(autoincrement()) @map("event_id")
+  name        String   @db.VarChar(150)
+  date        DateTime? @db.Date
+  detailsJson Json?    @map("details_json")
+
+  @@map("school_events")
+}
+
+model AuditLog {
+  logId     Int      @id @default(autoincrement()) @map("log_id")
+  userId    Int?     @map("user_id")
+  action    String   @db.VarChar(100)
+  tableName String?  @map("table_name") @db.VarChar(100)
+  recordId  Int?     @map("record_id")
+  timestamp DateTime @default(now()) @db.Timestamptz
+
+  user User? @relation(fields: [userId], references: [userId])
+
+  @@index([userId])
+  @@index([timestamp])
+  @@map("audit_log")
+}
