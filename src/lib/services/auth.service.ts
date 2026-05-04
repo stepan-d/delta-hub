@@ -1,17 +1,22 @@
 import bcrypt from 'bcryptjs'
 import { cookies } from 'next/headers'
+import { Prisma } from '@prisma/client'
 import { forbidden, unauthorized } from '@/lib/api-response'
-import { signJwt, getSession, type SessionUser } from '@/lib/auth/session'
-import { getUserByEmail, getUserByUsername, createUser } from '@/lib/services/user.service'
+import { signJwt, getSession, type SessionUser, COOKIE_NAME } from '@/lib/auth/session'
+import { getUserByEmail, getUserById, createUser } from '@/lib/services/user.service'
 import type { RegisterInput, LoginInput } from '@/lib/validations/auth.schema'
 
-const COOKIE_NAME = 'session'
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 7 // 7 days
+const MODERATION_ROLES = new Set(['Moderator', 'Admin'])
 
-type SafeUser = Omit<
-  Awaited<ReturnType<typeof getUserByEmail>>,
-  'passwordHash'
-> & { passwordHash?: never }
+type AuthUser = NonNullable<Awaited<ReturnType<typeof getUserByEmail>>>
+export type SafeUser = Omit<AuthUser, 'passwordHash'>
+
+function conflictField(e: Prisma.PrismaClientKnownRequestError): 'email' | 'username' {
+  const target = e.meta?.target
+  const str = Array.isArray(target) ? target.join(',') : String(target ?? '')
+  return str.includes('email') ? 'email' : 'username'
+}
 
 async function setSessionCookie(user: SessionUser): Promise<void> {
   const token = await signJwt(user)
@@ -25,37 +30,39 @@ async function setSessionCookie(user: SessionUser): Promise<void> {
   })
 }
 
+function toSafeUser(user: AuthUser): SafeUser {
+  const { passwordHash: _passwordHash, ...safeUser } = user
+  return safeUser
+}
+
 export async function register(input: RegisterInput): Promise<
   { ok: true; user: SafeUser } | { ok: false; conflict: 'username' | 'email' }
 > {
-  const [existingByEmail, existingByUsername] = await Promise.all([
-    getUserByEmail(input.email),
-    getUserByUsername(input.username),
-  ])
-
-  if (existingByEmail) return { ok: false, conflict: 'email' }
-  if (existingByUsername) return { ok: false, conflict: 'username' }
-
   const passwordHash = await bcrypt.hash(input.password, 12)
-  const created = await createUser({
-    username: input.username,
-    email: input.email,
-    passwordHash,
-    schoolYear: input.schoolYear,
-    favoriteSubject: input.favoriteSubject,
-  })
+  try {
+    const created = await createUser({
+      username: input.username,
+      email: input.email,
+      passwordHash,
+      schoolYear: input.schoolYear,
+      favoriteSubject: input.favoriteSubject,
+    })
 
-  const sessionUser: SessionUser = {
-    userId: created.userId,
-    username: created.username,
-    email: created.email,
-    role: created.role,
+    const sessionUser: SessionUser = {
+      userId: created.userId,
+      username: created.username,
+      email: created.email,
+      role: created.role,
+    }
+    await setSessionCookie(sessionUser)
+
+    return { ok: true, user: created }
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+      return { ok: false, conflict: conflictField(e) }
+    }
+    throw e
   }
-  await setSessionCookie(sessionUser)
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { passwordHash: _ph, ...safeUser } = created
-  return { ok: true, user: safeUser as SafeUser }
 }
 
 export async function login(input: LoginInput): Promise<
@@ -75,9 +82,7 @@ export async function login(input: LoginInput): Promise<
   }
   await setSessionCookie(sessionUser)
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { passwordHash: _ph, ...safeUser } = user
-  return { ok: true, user: safeUser as SafeUser }
+  return { ok: true, user: toSafeUser(user) }
 }
 
 export async function logout(): Promise<void> {
@@ -87,6 +92,13 @@ export async function logout(): Promise<void> {
 
 export async function getCurrentUser(): Promise<SessionUser | null> {
   return getSession()
+}
+
+export async function getCurrentUserProfile(): Promise<SafeUser | null> {
+  const session = await getSession()
+  if (!session) return null
+
+  return getUserById(session.userId)
 }
 
 export async function requireAuth(): Promise<SessionUser | Response> {
@@ -100,4 +112,15 @@ export async function requireAdmin(): Promise<SessionUser | Response> {
   if (!user) return unauthorized()
   if (user.role !== 'Admin') return forbidden()
   return user
+}
+
+export async function requireModerator(): Promise<SessionUser | Response> {
+  const user = await getSession()
+  if (!user) return unauthorized()
+  if (!MODERATION_ROLES.has(user.role)) return forbidden()
+  return user
+}
+
+export function isModeratorRole(role: string): boolean {
+  return MODERATION_ROLES.has(role)
 }

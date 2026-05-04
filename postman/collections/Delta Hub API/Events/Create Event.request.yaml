@@ -1,0 +1,17 @@
+$kind: http-request
+name: Create Event
+method: POST
+url: '{{baseUrl}}/api/events'
+order: 2000
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "Školní výlet",
+      "date": "2026-05-15",
+      "detailsJson": { "bus": true, "cena": 500 }
+    }
+description: '🛡️ Admin. Vytvoření akce. name povinné (1–150 znaků). date: YYYY-MM-DD nebo null. Response 201.'

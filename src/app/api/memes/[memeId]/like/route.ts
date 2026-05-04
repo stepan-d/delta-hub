@@ -1,4 +1,6 @@
-import { notFound, ok, serverError } from '@/lib/api-response'
+export const runtime = 'nodejs'
+
+import { badRequest, notFound, ok, handlePrismaError } from '@/lib/api-response'
 import { requireAuth } from '@/lib/services/auth.service'
 import { getMemeById } from '@/lib/services/meme.service'
 import { toggleLike } from '@/lib/services/like.service'
@@ -13,14 +15,14 @@ export async function POST(_req: Request, { params }: Ctx): Promise<Response> {
 
     const { memeId: raw } = await params
     const memeId = parseInt(raw, 10)
-    if (isNaN(memeId)) return notFound('Meme')
+    if (isNaN(memeId) || memeId <= 0) return badRequest('Invalid memeId')
 
     const meme = await getMemeById(memeId)
     if (!meme) return notFound('Meme')
 
     const data = await toggleLike(memeId, session.userId)
     return ok(data)
-  } catch {
-    return serverError()
+  } catch (e) {
+    return handlePrismaError(e)
   }
 }

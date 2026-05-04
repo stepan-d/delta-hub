@@ -1,0 +1,6 @@
+$kind: http-request
+name: Delete Comment
+method: DELETE
+url: '{{baseUrl}}/api/memes/{{memeId}}/comments/{{commentId}}'
+order: 4000
+description: '🔒 Login (vlastní komentář nebo Admin). Smazání komentáře. Response 204.'

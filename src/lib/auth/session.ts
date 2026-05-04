@@ -14,6 +14,8 @@ type JwtClaims = SessionUser & JWTPayload
 const ALGORITHM = 'HS256'
 const EXPIRATION = '7d'
 
+export const COOKIE_NAME = 'session'
+
 function getSecret(): Uint8Array {
   const secret = process.env.JWT_SECRET
   if (!secret) throw new Error('JWT_SECRET environment variable is not set')
@@ -46,7 +48,7 @@ export async function verifyJwt(token: string): Promise<SessionUser | null> {
 
 export async function getSession(): Promise<SessionUser | null> {
   const cookieStore = await cookies()
-  const token = cookieStore.get('session')?.value
+  const token = cookieStore.get(COOKIE_NAME)?.value
   if (!token) return null
   return verifyJwt(token)
 }

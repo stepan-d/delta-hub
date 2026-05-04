@@ -1,0 +1,17 @@
+$kind: http-request
+name: Update Meme
+method: PATCH
+url: '{{baseUrl}}/api/memes/{{memeId}}'
+order: 4000
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "title": "Nový titulek",
+      "categoryId": 3,
+      "tags": { "škola": true }
+    }
+description: '🔒 Login (vlastní mém nebo Admin). Úprava méma. Alespoň jedno pole povinné.'

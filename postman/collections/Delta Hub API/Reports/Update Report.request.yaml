@@ -1,0 +1,15 @@
+$kind: http-request
+name: Update Report
+method: PATCH
+url: '{{baseUrl}}/api/admin/reports/{{reportId}}'
+order: 3000
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "status": "resolved"
+    }
+description: '🛡️ Admin. Aktualizace stavu nahlášení. status: pending|reviewed|rejected|resolved'

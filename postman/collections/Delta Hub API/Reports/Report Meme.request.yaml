@@ -1,0 +1,15 @@
+$kind: http-request
+name: Report Meme
+method: POST
+url: '{{baseUrl}}/api/memes/{{memeId}}/report'
+order: 1000
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "reason": "Nevhodný obsah"
+    }
+description: '🔒 Login. Nahlášení méma. reason: 1–1000 znaků. Response 201.'

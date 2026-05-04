@@ -1,17 +1,12 @@
 import { prisma } from '@/lib/prisma'
+import type { AuditLogQuery } from '@/lib/validations/audit.schema'
+import { logger } from '@/lib/logger'
 
 interface CreateAuditLogInput {
   userId?: number
   action: string
   tableName?: string
   recordId?: number
-}
-
-interface AuditLogQuery {
-  page: number
-  limit: number
-  userId?: number
-  action?: string
 }
 
 const userSelect = {
@@ -34,8 +29,8 @@ export async function createAuditLog(input: CreateAuditLogInput): Promise<void> 
         recordId: input.recordId ?? null,
       },
     })
-  } catch {
-    // Logging must never break the main action
+  } catch (e) {
+    logger.warn('Failed to write audit log', e)
   }
 }
 

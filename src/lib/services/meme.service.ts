@@ -1,16 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import type { Prisma } from '@prisma/client'
 import type { CreateMemeInput, UpdateMemeInput, MemeListQuery } from '@/lib/validations/meme.schema'
-
-const authorSelect = {
-  userId: true,
-  username: true,
-  email: true,
-  role: true,
-  schoolYear: true,
-  favoriteSubject: true,
-  createdAt: true,
-} as const
+import { publicUserSelect as authorSelect } from '@/lib/db/selects'
 
 const categorySelect = {
   categoryId: true,
@@ -26,12 +17,16 @@ function buildOrderBy(sort: MemeListQuery['sort']): Prisma.MemeOrderByWithRelati
   }
 }
 
-function formatMeme<T extends {
-  user: object
-  _count: { memeComments: number }
-  memeLikes?: Array<unknown>
-}>(meme: T, currentUserId?: number) {
-  const { user, _count, memeLikes, ...rest } = meme
+function formatMeme<
+  TUser extends { userId: number },
+  T extends {
+    userId: number
+    user: TUser
+    _count: { memeComments: number }
+    memeLikes?: Array<unknown>
+  }
+>(meme: T, currentUserId?: number) {
+  const { user, _count, memeLikes, userId: _userId, ...rest } = meme
   return {
     ...rest,
     author: user,
@@ -91,40 +86,86 @@ export async function getMemeById(memeId: number, currentUserId?: number) {
   return formatMeme(meme, currentUserId)
 }
 
-export async function createMeme(input: CreateMemeInput, userId: number) {
-  const meme = await prisma.meme.create({
-    data: {
-      userId,
-      title: input.title,
-      imageUrl: input.imageUrl,
-      categoryId: input.categoryId ?? null,
-      tags: (input.tags ?? {}) as Prisma.InputJsonObject,
-    },
+export async function getAdminMemes() {
+  const memes = await prisma.meme.findMany({
+    orderBy: { createdAt: 'desc' },
     include: {
       user: { select: authorSelect },
       category: { select: categorySelect },
       _count: { select: { memeComments: true } },
     },
   })
-  return formatMeme(meme, userId)
+
+  return memes.map((meme) => formatMeme(meme))
+}
+
+function tagsToRows(tags: Record<string, unknown>): Array<{ tagName: string; weight: number }> {
+  return Object.entries(tags).map(([tagName, weight]) => ({
+    tagName,
+    weight: typeof weight === 'number' ? weight : 1,
+  }))
+}
+
+export async function createMeme(input: CreateMemeInput, userId: number) {
+  const tags = (input.tags ?? {}) as Record<string, unknown>
+  const tagRows = tagsToRows(tags)
+
+  return prisma.$transaction(async (tx) => {
+    const meme = await tx.meme.create({
+      data: {
+        userId,
+        title: input.title,
+        imageUrl: input.imageUrl,
+        categoryId: input.categoryId ?? null,
+        tags: tags as Prisma.InputJsonObject,
+      },
+      include: {
+        user: { select: authorSelect },
+        category: { select: categorySelect },
+        _count: { select: { memeComments: true } },
+        memeLikes: { where: { userId }, select: { userId: true } },
+      },
+    })
+
+    if (tagRows.length > 0) {
+      await tx.memeTag.createMany({
+        data: tagRows.map((r) => ({ memeId: meme.memeId, ...r })),
+      })
+    }
+
+    return formatMeme(meme, userId)
+  })
 }
 
 export async function updateMeme(memeId: number, input: UpdateMemeInput, currentUserId: number) {
-  const meme = await prisma.meme.update({
-    where: { memeId },
-    data: {
-      ...(input.title !== undefined && { title: input.title }),
-      ...(input.categoryId !== undefined && { categoryId: input.categoryId }),
-      ...(input.tags !== undefined && { tags: input.tags as Prisma.InputJsonObject }),
-    },
-    include: {
-      user: { select: authorSelect },
-      category: { select: categorySelect },
-      _count: { select: { memeComments: true } },
-      memeLikes: { where: { userId: currentUserId }, select: { userId: true } },
-    },
+  return prisma.$transaction(async (tx) => {
+    const meme = await tx.meme.update({
+      where: { memeId },
+      data: {
+        ...(input.title !== undefined && { title: input.title }),
+        ...(input.categoryId !== undefined && { categoryId: input.categoryId }),
+        ...(input.tags !== undefined && { tags: input.tags as Prisma.InputJsonObject }),
+      },
+      include: {
+        user: { select: authorSelect },
+        category: { select: categorySelect },
+        _count: { select: { memeComments: true } },
+        memeLikes: { where: { userId: currentUserId }, select: { userId: true } },
+      },
+    })
+
+    if (input.tags !== undefined) {
+      await tx.memeTag.deleteMany({ where: { memeId } })
+      const tagRows = tagsToRows(input.tags as Record<string, unknown>)
+      if (tagRows.length > 0) {
+        await tx.memeTag.createMany({
+          data: tagRows.map((r) => ({ memeId, ...r })),
+        })
+      }
+    }
+
+    return formatMeme(meme, currentUserId)
   })
-  return formatMeme(meme, currentUserId)
 }
 
 export async function deleteMeme(memeId: number): Promise<void> {

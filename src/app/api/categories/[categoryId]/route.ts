@@ -1,4 +1,7 @@
-import { badRequest, conflict, noContent, notFound, ok, serverError } from '@/lib/api-response'
+export const runtime = 'nodejs'
+
+import { after } from 'next/server'
+import { badRequest, conflict, noContent, notFound, ok, handlePrismaError, validationError } from '@/lib/api-response'
 import { requireAdmin } from '@/lib/services/auth.service'
 import {
   getCategoryById,
@@ -13,7 +16,7 @@ type Ctx = { params: Promise<{ categoryId: string }> }
 
 function parseCategoryId(raw: string): number | null {
   const id = parseInt(raw, 10)
-  return isNaN(id) ? null : id
+  return isNaN(id) || id <= 0 ? null : id
 }
 
 export async function PATCH(req: Request, { params }: Ctx): Promise<Response> {
@@ -31,7 +34,7 @@ export async function PATCH(req: Request, { params }: Ctx): Promise<Response> {
 
     const body = await req.json()
     const parsed = updateCategorySchema.safeParse(body)
-    if (!parsed.success) return badRequest(parsed.error.issues[0].message)
+    if (!parsed.success) return validationError(parsed.error)
 
     if (parsed.data.name && parsed.data.name !== existing.name) {
       const nameConflict = await getCategoryByName(parsed.data.name)
@@ -39,11 +42,11 @@ export async function PATCH(req: Request, { params }: Ctx): Promise<Response> {
     }
 
     const category = await updateCategory(categoryId, parsed.data)
-    createAuditLog({ userId: session.userId, action: 'update_category', tableName: 'meme_categories', recordId: categoryId })
+    after(() => createAuditLog({ userId: session.userId, action: 'update_category', tableName: 'meme_categories', recordId: categoryId }))
 
     return ok(category)
-  } catch {
-    return serverError()
+  } catch (e) {
+    return handlePrismaError(e)
   }
 }
 
@@ -61,10 +64,10 @@ export async function DELETE(_req: Request, { params }: Ctx): Promise<Response> 
     if (!existing) return notFound('Category')
 
     await deleteCategory(categoryId)
-    createAuditLog({ userId: session.userId, action: 'delete_category', tableName: 'meme_categories', recordId: categoryId })
+    after(() => createAuditLog({ userId: session.userId, action: 'delete_category', tableName: 'meme_categories', recordId: categoryId }))
 
     return noContent()
-  } catch {
-    return serverError()
+  } catch (e) {
+    return handlePrismaError(e)
   }
 }

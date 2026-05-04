@@ -29,6 +29,10 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
+## CORS
+
+The frontend and API run on the same origin (Next.js serves both). No CORS configuration is needed. If you ever serve the frontend from a separate origin, add `Access-Control-Allow-Origin` headers in `next.config.ts` and set `sameSite: 'none'; secure: true` on the session cookie in `src/lib/services/auth.service.ts`.
+
 ## Deploy on Vercel
 
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.

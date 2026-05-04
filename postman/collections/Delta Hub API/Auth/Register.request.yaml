@@ -1,0 +1,19 @@
+$kind: http-request
+name: Register
+method: POST
+url: '{{baseUrl}}/api/auth/register'
+order: 1000
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "username": "jan_novak",
+      "email": "jan@skola.cz",
+      "password": "heslo1234",
+      "schoolYear": 2,
+      "favoriteSubject": "Matematika"
+    }
+description: 'Registrace nového uživatele. Nastaví session cookie. Response 201.'

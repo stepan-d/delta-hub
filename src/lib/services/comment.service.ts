@@ -11,8 +11,11 @@ const authorSelect = {
   createdAt: true,
 } as const
 
-function formatComment<T extends { user: object }>(comment: T) {
-  const { user, ...rest } = comment
+function formatComment<
+  TUser extends { userId: number },
+  T extends { user: TUser; userId: number }
+>(comment: T) {
+  const { user, userId: _userId, ...rest } = comment
   return { ...rest, author: user }
 }
 
@@ -23,6 +26,28 @@ export async function getCommentsByMeme(memeId: number) {
     include: { user: { select: authorSelect } },
   })
   return comments.map(formatComment)
+}
+
+export async function getAdminComments() {
+  const comments = await prisma.memeComment.findMany({
+    orderBy: { createdAt: 'desc' },
+    include: {
+      user: { select: authorSelect },
+      meme: {
+        select: {
+          memeId: true,
+          title: true,
+          imageUrl: true,
+          createdAt: true,
+        },
+      },
+    },
+  })
+
+  return comments.map((comment) => {
+    const { user, userId: _userId, ...rest } = comment
+    return { ...rest, author: user }
+  })
 }
 
 export async function getCommentById(commentId: number) {

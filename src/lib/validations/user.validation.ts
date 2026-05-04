@@ -16,6 +16,7 @@ export const loginSchema = z.object({
 export const updateUserSchema = z.object({
   username: z.string().min(3).max(50).regex(/^[a-zA-Z0-9_]+$/).optional(),
   email: z.string().email().max(100).optional(),
+  role: z.enum(['User', 'Moderator', 'Admin']).optional(),
   schoolYear: z.number().int().min(1).max(4).nullable().optional(),
   favoriteSubject: z.string().max(100).nullable().optional(),
 }).refine((data) => Object.keys(data).length > 0, { message: 'At least one field is required' })

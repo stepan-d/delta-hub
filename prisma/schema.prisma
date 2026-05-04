@@ -55,7 +55,7 @@ model Meme {
   likeCount  Int          @default(0) @map("like_count")
   createdAt  DateTime     @default(now()) @map("created_at") @db.Timestamptz
 
-  user         User          @relation(fields: [userId], references: [userId])
+  user         User          @relation(fields: [userId], references: [userId], onDelete: Cascade)
   category     MemeCategory? @relation(fields: [categoryId], references: [categoryId])
   memeLikes    MemeLike[]
   memeComments MemeComment[]
@@ -74,8 +74,8 @@ model MemeLike {
   userId    Int      @map("user_id")
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
 
-  meme Meme @relation(fields: [memeId], references: [memeId])
-  user User @relation(fields: [userId], references: [userId])
+  meme Meme @relation(fields: [memeId], references: [memeId], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [userId], onDelete: Cascade)
 
   @@id([memeId, userId])
   @@index([memeId])
@@ -90,8 +90,8 @@ model MemeComment {
   text      String
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
 
-  meme Meme @relation(fields: [memeId], references: [memeId])
-  user User @relation(fields: [userId], references: [userId])
+  meme Meme @relation(fields: [memeId], references: [memeId], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [userId], onDelete: Cascade)
 
   @@index([memeId])
   @@index([userId])
@@ -105,7 +105,7 @@ model MemeTag {
   tagName  String @map("tag_name") @db.VarChar(50)
   weight   Int    @default(1)
 
-  meme Meme @relation(fields: [memeId], references: [memeId])
+  meme Meme @relation(fields: [memeId], references: [memeId], onDelete: Cascade)
 
   @@index([memeId])
   @@index([tagName])
@@ -120,8 +120,8 @@ model UserReport {
   status     String   @default("pending") @db.VarChar(30)
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
 
-  meme     Meme @relation(fields: [memeId], references: [memeId])
-  reporter User @relation(fields: [reporterId], references: [userId])
+  meme     Meme @relation(fields: [memeId], references: [memeId], onDelete: Cascade)
+  reporter User @relation(fields: [reporterId], references: [userId], onDelete: Cascade)
 
   @@index([memeId])
   @@index([reporterId])
@@ -146,7 +146,7 @@ model AuditLog {
   recordId  Int?     @map("record_id")
   timestamp DateTime @default(now()) @db.Timestamptz
 
-  user User? @relation(fields: [userId], references: [userId])
+  user User? @relation(fields: [userId], references: [userId], onDelete: Cascade)
 
   @@index([userId])
   @@index([timestamp])

@@ -1,4 +1,6 @@
-import { badRequest, conflict, forbidden, notFound, noContent, ok, serverError } from '@/lib/api-response'
+export const runtime = 'nodejs'
+
+import { badRequest, conflict, forbidden, notFound, noContent, ok, handlePrismaError, validationError } from '@/lib/api-response'
 import { requireAuth, requireAdmin } from '@/lib/services/auth.service'
 import { getUserById, updateUser, deleteUser } from '@/lib/services/user.service'
 import { updateUserSchema } from '@/lib/validations/user.validation'
@@ -7,7 +9,7 @@ type Ctx = { params: Promise<{ userId: string }> }
 
 function parseUserId(raw: string): number | null {
   const id = parseInt(raw, 10)
-  return isNaN(id) ? null : id
+  return isNaN(id) || id <= 0 ? null : id
 }
 
 export async function GET(_req: Request, { params }: Ctx): Promise<Response> {
@@ -26,8 +28,8 @@ export async function GET(_req: Request, { params }: Ctx): Promise<Response> {
     if (!user) return notFound('User')
 
     return ok(user)
-  } catch {
-    return serverError()
+  } catch (e) {
+    return handlePrismaError(e, 'User')
   }
 }
 
@@ -45,21 +47,25 @@ export async function PATCH(req: Request, { params }: Ctx): Promise<Response> {
 
     const body = await req.json()
     const parsed = updateUserSchema.safeParse(body)
-    if (!parsed.success) return badRequest(parsed.error.issues[0].message)
+    if (!parsed.success) return validationError(parsed.error)
+    if (parsed.data.role !== undefined && session.role !== 'Admin') return forbidden()
 
     const existing = await getUserById(userId)
     if (!existing) return notFound('User')
 
     const updated = await updateUser(userId, parsed.data)
     if (!updated.ok) {
+      if ('notFound' in updated) return notFound('User')
       return conflict(
-        updated.conflict === 'email' ? 'Email is already taken' : 'Username is already taken',
+        updated.conflict === 'email'
+          ? 'Tento e-mail už v komunitě používá jiný účet.'
+          : 'Tohle uživatelské jméno je už obsazené.',
       )
     }
 
     return ok(updated.user)
-  } catch {
-    return serverError()
+  } catch (e) {
+    return handlePrismaError(e, 'User')
   }
 }
 
@@ -77,7 +83,7 @@ export async function DELETE(_req: Request, { params }: Ctx): Promise<Response> 
 
     await deleteUser(userId)
     return noContent()
-  } catch {
-    return serverError()
+  } catch (e) {
+    return handlePrismaError(e, 'User')
   }
 }

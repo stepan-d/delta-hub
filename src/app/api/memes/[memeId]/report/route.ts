@@ -1,4 +1,7 @@
-import { badRequest, created, notFound, serverError } from '@/lib/api-response'
+export const runtime = 'nodejs'
+
+import { after } from 'next/server'
+import { badRequest, created, notFound, handlePrismaError, validationError } from '@/lib/api-response'
 import { requireAuth } from '@/lib/services/auth.service'
 import { getMemeById } from '@/lib/services/meme.service'
 import { createReport } from '@/lib/services/report.service'
@@ -15,20 +18,20 @@ export async function POST(req: Request, { params }: Ctx): Promise<Response> {
 
     const { memeId: raw } = await params
     const memeId = parseInt(raw, 10)
-    if (isNaN(memeId)) return badRequest('Invalid memeId')
+    if (isNaN(memeId) || memeId <= 0) return badRequest('Invalid memeId')
 
     const meme = await getMemeById(memeId)
     if (!meme) return notFound('Meme')
 
     const body = await req.json()
     const parsed = createReportSchema.safeParse(body)
-    if (!parsed.success) return badRequest(parsed.error.issues[0].message)
+    if (!parsed.success) return validationError(parsed.error)
 
     const report = await createReport(memeId, session.userId, parsed.data.reason)
-    createAuditLog({ userId: session.userId, action: 'report_meme', tableName: 'user_reports', recordId: report.reportId })
+    after(() => createAuditLog({ userId: session.userId, action: 'report_meme', tableName: 'user_reports', recordId: report.reportId }))
 
     return created(report)
-  } catch {
-    return serverError()
+  } catch (e) {
+    return handlePrismaError(e)
   }
 }

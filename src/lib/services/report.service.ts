@@ -47,5 +47,9 @@ export async function updateReportStatus(reportId: number, status: string) {
   return prisma.userReport.update({
     where: { reportId },
     data: { status },
+    include: {
+      meme: { select: memeSelect },
+      reporter: { select: reporterSelect },
+    },
   })
 }

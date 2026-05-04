@@ -1,14 +1,9 @@
-import { badRequest, ok, serverError } from '@/lib/api-response'
+export const runtime = 'nodejs'
+
+import { badRequest, ok, handlePrismaError, validationError } from '@/lib/api-response'
 import { requireAdmin } from '@/lib/services/auth.service'
 import { getAuditLogs } from '@/lib/services/audit.service'
-import { z } from 'zod'
-
-const auditLogQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(20),
-  userId: z.coerce.number().int().positive().optional(),
-  action: z.string().min(1).optional(),
-})
+import { auditLogQuerySchema } from '@/lib/validations/audit.schema'
 
 export async function GET(req: Request): Promise<Response> {
   try {
@@ -18,11 +13,11 @@ export async function GET(req: Request): Promise<Response> {
     const { searchParams } = new URL(req.url)
     const raw = Object.fromEntries(searchParams)
     const parsed = auditLogQuerySchema.safeParse(raw)
-    if (!parsed.success) return badRequest(parsed.error.issues[0].message)
+    if (!parsed.success) return validationError(parsed.error)
 
     const data = await getAuditLogs(parsed.data)
     return ok(data)
-  } catch {
-    return serverError()
+  } catch (e) {
+    return handlePrismaError(e)
   }
 }

@@ -1,4 +1,7 @@
-import { badRequest, created, notFound, ok, serverError } from '@/lib/api-response'
+export const runtime = 'nodejs'
+
+import { after } from 'next/server'
+import { badRequest, created, notFound, ok, handlePrismaError, validationError } from '@/lib/api-response'
 import { getCurrentUser, requireAuth } from '@/lib/services/auth.service'
 import { getMemeById } from '@/lib/services/meme.service'
 import { getCommentsByMeme, createComment } from '@/lib/services/comment.service'
@@ -9,7 +12,7 @@ type Ctx = { params: Promise<{ memeId: string }> }
 
 function parseMemeId(raw: string): number | null {
   const id = parseInt(raw, 10)
-  return isNaN(id) ? null : id
+  return isNaN(id) || id <= 0 ? null : id
 }
 
 export async function GET(_req: Request, { params }: Ctx): Promise<Response> {
@@ -23,8 +26,8 @@ export async function GET(_req: Request, { params }: Ctx): Promise<Response> {
 
     const comments = await getCommentsByMeme(memeId)
     return ok(comments)
-  } catch {
-    return serverError()
+  } catch (e) {
+    return handlePrismaError(e)
   }
 }
 
@@ -43,13 +46,13 @@ export async function POST(req: Request, { params }: Ctx): Promise<Response> {
 
     const body = await req.json()
     const parsed = createCommentSchema.safeParse(body)
-    if (!parsed.success) return badRequest(parsed.error.issues[0].message)
+    if (!parsed.success) return validationError(parsed.error)
 
     const comment = await createComment(memeId, session.userId, parsed.data)
-    createAuditLog({ userId: session.userId, action: 'create_comment', tableName: 'meme_comments', recordId: comment.commentId })
+    after(() => createAuditLog({ userId: session.userId, action: 'create_comment', tableName: 'meme_comments', recordId: comment.commentId }))
 
     return created(comment)
-  } catch {
-    return serverError()
+  } catch (e) {
+    return handlePrismaError(e)
   }
 }

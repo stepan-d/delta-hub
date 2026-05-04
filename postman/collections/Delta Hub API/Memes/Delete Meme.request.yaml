@@ -1,0 +1,6 @@
+$kind: http-request
+name: Delete Meme
+method: DELETE
+url: '{{baseUrl}}/api/memes/{{memeId}}'
+order: 5000
+description: '🔒 Login (vlastní mém nebo Admin). Smazání méma. Response 204.'
