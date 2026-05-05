@@ -41,7 +41,6 @@ class UploadError extends Error {
 
 type StorageConfig = {
   bucket: string
-  publicBaseUrl: string
   client: S3Client
 }
 
@@ -59,12 +58,10 @@ function getStorageConfig(): StorageConfig {
   const bucket = getRequiredEnv('MINIO_BUCKET')
   const accessKeyId = getRequiredEnv('MINIO_ACCESS_KEY')
   const secretAccessKey = getRequiredEnv('MINIO_SECRET_KEY')
-  const publicBaseUrl = getRequiredEnv('MINIO_PUBLIC_BASE_URL').replace(/\/+$/, '')
   const forcePathStyle = process.env.MINIO_FORCE_PATH_STYLE?.trim() !== 'false'
 
   return {
     bucket,
-    publicBaseUrl,
     client: new S3Client({
       endpoint,
       region,
@@ -161,7 +158,7 @@ export function isUploadError(error: unknown): error is UploadError {
 export async function uploadMemeImage(file: File): Promise<UploadedImage> {
   assertValidImageFile(file)
 
-  const { bucket, publicBaseUrl, client } = getStorageConfig()
+  const { bucket, client } = getStorageConfig()
   const transformed = await transformToWebp(file)
   const now = new Date()
   const fileBaseName = sanitizeFileBaseName(file.name)
@@ -188,7 +185,7 @@ export async function uploadMemeImage(file: File): Promise<UploadedImage> {
   }
 
   return {
-    imageUrl: `${publicBaseUrl}/${objectKey}`,
+    imageUrl: `/api/images/${objectKey}`,
     objectKey,
     contentType: 'image/webp',
     width: transformed.width,

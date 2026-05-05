@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
-import { apiGet, apiPost } from "@/lib/api-client";
+import { apiGet, apiPatch, apiPost } from "@/lib/api-client";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonStyles } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -505,11 +505,41 @@ export function RegisterPanel() {
   );
 }
 
+type ProfileEditForm = {
+  username: string;
+  schoolYear: string;
+  favoriteSubject: string;
+};
+
+type ProfileEditErrors = {
+  username?: string;
+  schoolYear?: string;
+  favoriteSubject?: string;
+};
+
+function validateProfileEdit(form: ProfileEditForm): ProfileEditErrors {
+  const errors: ProfileEditErrors = {};
+  if (!form.username.trim()) errors.username = "Vyplň uživatelské jméno.";
+  if (form.schoolYear) {
+    const year = Number(form.schoolYear);
+    if (!Number.isInteger(year) || year < 1 || year > 4) {
+      errors.schoolYear = "Ročník musí být číslo od 1 do 4.";
+    }
+  }
+  if (form.favoriteSubject.trim().length > 80) {
+    errors.favoriteSubject = "Oblíbený předmět zkrať na 80 znaků nebo méně.";
+  }
+  return errors;
+}
+
 export function ProfilePanel() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [error, setError] = useState<ErrorState | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isPending, startTransition] = useTransition();
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState<ProfileEditForm>({ username: "", schoolYear: "", favoriteSubject: "" });
+  const [editErrors, setEditErrors] = useState<ProfileEditErrors>({});
   const { notifyError, notifySuccess } = useToast();
 
   useEffect(() => {
@@ -521,39 +551,56 @@ export function ProfilePanel() {
 
       try {
         const currentUser = await fetchCurrentUser();
-        if (isMounted) {
-          setUser(currentUser);
-        }
+        if (isMounted) setUser(currentUser);
       } catch (loadError) {
         if (isMounted) {
           setUser(null);
           setError(normalizeClientError(loadError));
         }
       } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
+        if (isMounted) setIsLoading(false);
       }
     }
 
     void loadProfile();
-
-    return () => {
-      isMounted = false;
-    };
+    return () => { isMounted = false; };
   }, []);
 
-  function reloadProfile() {
+  function beginEdit() {
+    if (!user) return;
+    setEditForm({
+      username: user.username,
+      schoolYear: user.schoolYear ? String(user.schoolYear) : "",
+      favoriteSubject: user.favoriteSubject ?? "",
+    });
+    setEditErrors({});
     setError(null);
+    setIsEditing(true);
+  }
+
+  function updateEditField<K extends keyof ProfileEditForm>(field: K, value: ProfileEditForm[K]) {
+    setEditForm((current) => ({ ...current, [field]: value }));
+    setEditErrors((current) => ({ ...current, [field]: undefined }));
+  }
+
+  function handleSave() {
+    if (!user) return;
+    const nextErrors = validateProfileEdit(editForm);
+    setEditErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) return;
 
     startTransition(async () => {
       try {
-        const currentUser = await fetchCurrentUser();
-        setUser(currentUser);
-        notifySuccess("Profil byl aktualizovaný.");
-      } catch (reloadError) {
-        setUser(null);
-        const normalizedError = normalizeClientError(reloadError);
+        const updated = await apiPatch<AuthUser>(`/api/users/${user.userId}`, {
+          username: editForm.username.trim(),
+          schoolYear: editForm.schoolYear ? Number(editForm.schoolYear) : null,
+          favoriteSubject: editForm.favoriteSubject.trim() || null,
+        });
+        setUser(updated);
+        setIsEditing(false);
+        notifySuccess("Profil byl uložený.");
+      } catch (saveError) {
+        const normalizedError = normalizeClientError(saveError);
         setError(normalizedError);
         notifyError(normalizedError.message, normalizedError.details);
       }
@@ -581,67 +628,120 @@ export function ProfilePanel() {
       <PageHeader
         eyebrow="Profil"
         title="Tvůj profil"
-        description="Přehled aktivní session a základních údajů, které jsou dostupné pro přihlášeného člena komunity."
+        description="Přehled a správa tvého účtu v DELTA Hubu."
         actions={
-          <Button
-            type="button"
-            onClick={reloadProfile}
-            disabled={isPending || isLoading}
-            variant="secondary"
-          >
-            {isPending ? "Načítám..." : "Aktualizovat profil"}
-          </Button>
+          !isLoading && user && !isEditing ? (
+            <Button type="button" onClick={beginEdit} variant="secondary" disabled={isPending}>
+              Upravit profil
+            </Button>
+          ) : undefined
         }
       />
 
-      <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-        <div className="min-w-0 space-y-4">
-          <ErrorNotice error={error} />
+      <ErrorNotice error={error} />
 
-          {isLoading ? (
-            <LoadingState
-              title="Načítám aktuální session"
-              description="Ověřuji přihlášení a načítám profil právě aktivního účtu."
-            />
-          ) : null}
+      {isLoading ? (
+        <LoadingState
+          title="Načítám profil"
+          description="Ověřuji přihlášení a načítám údaje aktivního účtu."
+        />
+      ) : null}
 
-          {!isLoading && user ? (
-            <UserCard user={user} onLogout={handleLogout} pending={isPending} />
-          ) : null}
+      {!isLoading && !user && !error ? (
+        <EmptyState
+          title="Žádná aktivní session"
+          description="Pro zobrazení profilu se nejdřív přihlas."
+          action={
+            <Link href="/login" className={buttonStyles({ variant: "primary", size: "sm" })}>
+              Přejít na login
+            </Link>
+          }
+        />
+      ) : null}
 
-          {!isLoading && !user && !error ? (
-            <EmptyState
-              title="Žádná aktivní session"
-              description="Pro načtení profilu je potřeba se nejdřív přihlásit. Jakmile bude session cookie existovat, profil se načte automaticky."
-              action={
-                <Link href="/login" className={buttonStyles({ variant: "primary", size: "sm" })}>
-                  Přejít na login
-                </Link>
-              }
-            />
-          ) : null}
+      {!isLoading && user ? (
+        <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+          <div className="min-w-0 space-y-4">
+            {isEditing ? (
+              <Card className="min-w-0 overflow-hidden border-blue-100 bg-[linear-gradient(180deg,#ffffff_0%,#eff6ff_100%)]">
+                <CardHeader>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="brand">Editace profilu</Badge>
+                    <Badge variant="outline">#{user.userId}</Badge>
+                  </div>
+                  <CardTitle>Upravit profil</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Input
+                    id="profile-username"
+                    label="Uživatelské jméno"
+                    value={editForm.username}
+                    onChange={(e) => updateEditField("username", e.target.value)}
+                    error={editErrors.username}
+                    autoFocus
+                  />
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Input
+                      id="profile-school-year"
+                      label="Ročník"
+                      type="number"
+                      min={1}
+                      max={4}
+                      inputMode="numeric"
+                      value={editForm.schoolYear}
+                      onChange={(e) => updateEditField("schoolYear", e.target.value)}
+                      error={editErrors.schoolYear}
+                      placeholder="1 až 4"
+                    />
+                    <Input
+                      id="profile-favorite-subject"
+                      label="Oblíbený předmět"
+                      value={editForm.favoriteSubject}
+                      onChange={(e) => updateEditField("favoriteSubject", e.target.value)}
+                      error={editErrors.favoriteSubject}
+                      placeholder="napr. matematika"
+                      maxLength={80}
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-3">
+                    <Button type="button" onClick={handleSave} disabled={isPending}>
+                      {isPending ? "Ukládám..." : "Uložit změny"}
+                    </Button>
+                    <Button type="button" variant="secondary" onClick={() => setIsEditing(false)} disabled={isPending}>
+                      Zrušit
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <UserCard user={user} onLogout={handleLogout} pending={isPending} />
+            )}
+          </div>
+
+          <Card className="min-w-0">
+            <CardHeader>
+              <CardTitle>Informace o účtu</CardTitle>
+              <CardDescription>
+                E-mail a role nelze změnit vlastními silami. Pro změnu kontaktuj admina.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm leading-6 text-slate-600">
+              <div className="break-words rounded-3xl bg-slate-50 p-4">
+                <span className="font-medium text-slate-700">E-mail:</span>{" "}
+                <span className="break-all">{user.email}</span>
+              </div>
+              <div className="break-words rounded-3xl bg-slate-50 p-4">
+                <span className="font-medium text-slate-700">Role:</span>{" "}
+                {user.role}
+              </div>
+              <div className="break-words rounded-3xl bg-slate-50 p-4">
+                <span className="font-medium text-slate-700">ID:</span>{" "}
+                #{user.userId}
+              </div>
+            </CardContent>
+          </Card>
         </div>
-
-        <Card className="min-w-0">
-          <CardHeader>
-            <CardTitle>Jak profil funguje</CardTitle>
-            <CardDescription>
-              Přihlášení se drží v bezpečné session cookie a profil vždy načítá aktuální stav přihlášeného účtu.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm leading-6 text-slate-600">
-            <div className="break-words rounded-3xl bg-slate-50 p-4">
-              Po načtení stránky zkoušíme ověřit session a ukázat právě přihlášeného uživatele.
-            </div>
-            <div className="break-words rounded-3xl bg-slate-50 p-4">
-              Tlačítko odhlášení okamžitě ukončí session a přepne rozhraní do nepřihlášeného stavu.
-            </div>
-            <div className="break-words rounded-3xl bg-slate-50 p-4">
-              Tady je připravené místo pro pozdější editaci profilu, historii aktivit nebo reputaci.
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      ) : null}
     </div>
   );
 }
