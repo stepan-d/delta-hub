@@ -153,14 +153,14 @@ function DetailStatCard({
   return (
     <div
       className={cn(
-        "rounded-[24px] border px-4 py-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)]",
+        "min-w-0 rounded-[24px] border px-4 py-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)]",
         tone === "accent"
           ? "border-sky-200 bg-sky-50/80"
           : "border-slate-200 bg-white",
       )}
     >
       <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{label}</p>
-      <p className="mt-2 text-xl font-semibold text-slate-950">{value}</p>
+      <p className="mt-2 truncate text-xl font-semibold text-slate-950">{value}</p>
     </div>
   );
 }
