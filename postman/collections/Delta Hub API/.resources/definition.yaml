@@ -1,6 +1,0 @@
-$kind: collection
-name: Delta Hub API
-description: 'API collection for Delta Hub — a school meme-sharing platform. Auth uses httpOnly session cookie (JWT). 🔒 = requires login, 🛡️ = requires Admin role.'
-variables:
-  - key: baseUrl
-    value: 'http://localhost:3000'

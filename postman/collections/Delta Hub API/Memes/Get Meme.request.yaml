@@ -1,6 +1,0 @@
-$kind: http-request
-name: Get Meme
-method: GET
-url: '{{baseUrl}}/api/memes/{{memeId}}'
-order: 3000
-description: 'Detail méma. Response 200 nebo 404.'

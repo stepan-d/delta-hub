@@ -1,6 +1,0 @@
-$kind: http-request
-name: Delete Event
-method: DELETE
-url: '{{baseUrl}}/api/events/{{eventId}}'
-order: 5000
-description: '🛡️ Admin. Smazání akce. Response 204.'

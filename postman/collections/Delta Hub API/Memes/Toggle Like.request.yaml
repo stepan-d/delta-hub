@@ -1,6 +1,0 @@
-$kind: http-request
-name: Toggle Like
-method: POST
-url: '{{baseUrl}}/api/memes/{{memeId}}/like'
-order: 6000
-description: '🔒 Login. Toggle like — první volání přidá like, druhé ho odebere. Response 200.'

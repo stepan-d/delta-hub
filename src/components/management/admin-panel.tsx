@@ -24,6 +24,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast-provider";
 import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api-client";
 import { normalizeClientError, type ErrorState } from "@/lib/client-error";
+import {
+  createEmptyEventDetailsForm,
+  detailsJsonToForm,
+  eventDetailsFormToJson,
+  getEventDetailEntries,
+  type EventDetailsForm,
+} from "@/lib/event-details";
 import { cn, formatDate } from "@/lib/utils";
 
 type AdminUser = {
@@ -225,15 +232,18 @@ function EmptySection({ title, description }: { title: string; description: stri
   return <EmptyState title={title} description={description} />;
 }
 
-function toJsonString(value: Record<string, unknown> | null | undefined) {
-  if (!value) return "";
-  return JSON.stringify(value, null, 2);
-}
+type EventFormState = {
+  name: string;
+  date: string;
+  details: EventDetailsForm;
+};
 
-function parseDetailsJson(raw: string) {
-  const trimmed = raw.trim();
-  if (!trimmed) return undefined;
-  return JSON.parse(trimmed) as Record<string, unknown>;
+function createEmptyEventForm(): EventFormState {
+  return {
+    name: "",
+    date: "",
+    details: createEmptyEventDetailsForm(),
+  };
 }
 
 function reportBadgeVariant(status: AdminReport["status"]) {
@@ -280,8 +290,8 @@ export function AdminPanel() {
   const [newCategoryForm, setNewCategoryForm] = useState({ name: "", description: "" });
 
   const [editingEventId, setEditingEventId] = useState<number | null>(null);
-  const [eventForm, setEventForm] = useState({ name: "", date: "", detailsJson: "" });
-  const [newEventForm, setNewEventForm] = useState({ name: "", date: "", detailsJson: "" });
+  const [eventForm, setEventForm] = useState<EventFormState>(createEmptyEventForm);
+  const [newEventForm, setNewEventForm] = useState<EventFormState>(createEmptyEventForm);
 
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -442,7 +452,7 @@ export function AdminPanel() {
     setEventForm({
       name: event.name,
       date: event.date ? event.date.slice(0, 10) : "",
-      detailsJson: toJsonString(event.detailsJson),
+      details: detailsJsonToForm(event.detailsJson),
     });
     resetMessages();
   }
@@ -647,14 +657,6 @@ export function AdminPanel() {
       return;
     }
 
-    let detailsJson: Record<string, unknown> | undefined;
-    try {
-      detailsJson = parseDetailsJson(newEventForm.detailsJson);
-    } catch {
-      setError({ message: "Detaily akce musí být validní JSON objekt.", details: [] });
-      return;
-    }
-
     resetMessages();
     setActionKey("create-event");
 
@@ -663,12 +665,12 @@ export function AdminPanel() {
         const created = await apiPost<AdminEvent>("/api/events", {
           name: newEventForm.name.trim(),
           date: newEventForm.date || null,
-          detailsJson,
+          detailsJson: eventDetailsFormToJson(newEventForm.details),
         });
 
         setEvents((current) => [...current, created]);
         setEventsMeta((current) => ({ ...current, total: current.total + 1 }));
-        setNewEventForm({ name: "", date: "", detailsJson: "" });
+        setNewEventForm(createEmptyEventForm());
         setSuccessMessage("Akce byla vytvořená.");
         notifySuccess("Akce byla vytvořená.");
       } catch (createError) {
@@ -685,14 +687,6 @@ export function AdminPanel() {
       return;
     }
 
-    let detailsJson: Record<string, unknown> | undefined;
-    try {
-      detailsJson = parseDetailsJson(eventForm.detailsJson);
-    } catch {
-      setError({ message: "Detaily akce musí být validní JSON objekt.", details: [] });
-      return;
-    }
-
     resetMessages();
     setActionKey("save-event");
     setActionTargetId(eventId);
@@ -702,7 +696,7 @@ export function AdminPanel() {
         const updated = await apiPatch<AdminEvent>(`/api/events/${eventId}`, {
           name: eventForm.name.trim(),
           date: eventForm.date || null,
-          detailsJson,
+          detailsJson: eventDetailsFormToJson(eventForm.details),
         });
 
         setEvents((current) =>
@@ -1407,14 +1401,99 @@ export function AdminPanel() {
                   onChange={(event) => setNewEventForm((current) => ({ ...current, date: event.target.value }))}
                 />
               </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <Input
+                  id="new-event-location"
+                  label="Místo"
+                  value={newEventForm.details.location}
+                  onChange={(event) =>
+                    setNewEventForm((current) => ({
+                      ...current,
+                      details: { ...current.details, location: event.target.value },
+                    }))
+                  }
+                />
+                <Input
+                  id="new-event-type"
+                  label="Typ akce"
+                  value={newEventForm.details.type}
+                  onChange={(event) =>
+                    setNewEventForm((current) => ({
+                      ...current,
+                      details: { ...current.details, type: event.target.value },
+                    }))
+                  }
+                />
+                <Input
+                  id="new-event-audience"
+                  label="Pro koho"
+                  value={newEventForm.details.audience}
+                  onChange={(event) =>
+                    setNewEventForm((current) => ({
+                      ...current,
+                      details: { ...current.details, audience: event.target.value },
+                    }))
+                  }
+                />
+                <Input
+                  id="new-event-speaker"
+                  label="Přednášející / organizátor"
+                  value={newEventForm.details.speaker}
+                  onChange={(event) =>
+                    setNewEventForm((current) => ({
+                      ...current,
+                      details: { ...current.details, speaker: event.target.value },
+                    }))
+                  }
+                />
+                <Input
+                  id="new-event-capacity"
+                  label="Kapacita"
+                  type="number"
+                  min="1"
+                  inputMode="numeric"
+                  value={newEventForm.details.capacity}
+                  onChange={(event) =>
+                    setNewEventForm((current) => ({
+                      ...current,
+                      details: { ...current.details, capacity: event.target.value },
+                    }))
+                  }
+                />
+                <Input
+                  id="new-event-prize"
+                  label="Cena / odměna"
+                  value={newEventForm.details.prize}
+                  onChange={(event) =>
+                    setNewEventForm((current) => ({
+                      ...current,
+                      details: { ...current.details, prize: event.target.value },
+                    }))
+                  }
+                />
+              </div>
               <Textarea
-                id="new-event-json"
-                label="Detaily (JSON)"
-                value={newEventForm.detailsJson}
+                id="new-event-agenda"
+                label="Agenda"
+                value={newEventForm.details.agenda}
                 onChange={(event) =>
-                  setNewEventForm((current) => ({ ...current, detailsJson: event.target.value }))
+                  setNewEventForm((current) => ({
+                    ...current,
+                    details: { ...current.details, agenda: event.target.value },
+                  }))
                 }
-                placeholder={`{\n  "location": "DELTA",\n  "capacity": 100\n}`}
+                hint="Každý bod napiš na samostatný řádek."
+              />
+              <Textarea
+                id="new-event-description"
+                label="Poznámka"
+                value={newEventForm.details.description}
+                onChange={(event) =>
+                  setNewEventForm((current) => ({
+                    ...current,
+                    details: { ...current.details, description: event.target.value },
+                  }))
+                }
               />
               <Button type="submit" disabled={isPending}>
                 {isPending && actionKey === "create-event" ? "Vytvářím..." : "Vytvořit akci"}
@@ -1430,6 +1509,7 @@ export function AdminPanel() {
             {events.map((eventItem) => {
               const isEditing = editingEventId === eventItem.eventId;
               const isRowPending = isPending && actionTargetId === eventItem.eventId;
+              const detailEntries = getEventDetailEntries(eventItem.detailsJson);
 
               return (
                 <div key={eventItem.eventId} className="min-w-0 overflow-hidden rounded-[28px] border border-slate-200 bg-slate-50 p-5">
@@ -1454,11 +1534,99 @@ export function AdminPanel() {
                           onChange={(event) => setEventForm((current) => ({ ...current, date: event.target.value }))}
                         />
                       </div>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <Input
+                          id={`event-location-${eventItem.eventId}`}
+                          label="Místo"
+                          value={eventForm.details.location}
+                          onChange={(event) =>
+                            setEventForm((current) => ({
+                              ...current,
+                              details: { ...current.details, location: event.target.value },
+                            }))
+                          }
+                        />
+                        <Input
+                          id={`event-type-${eventItem.eventId}`}
+                          label="Typ akce"
+                          value={eventForm.details.type}
+                          onChange={(event) =>
+                            setEventForm((current) => ({
+                              ...current,
+                              details: { ...current.details, type: event.target.value },
+                            }))
+                          }
+                        />
+                        <Input
+                          id={`event-audience-${eventItem.eventId}`}
+                          label="Pro koho"
+                          value={eventForm.details.audience}
+                          onChange={(event) =>
+                            setEventForm((current) => ({
+                              ...current,
+                              details: { ...current.details, audience: event.target.value },
+                            }))
+                          }
+                        />
+                        <Input
+                          id={`event-speaker-${eventItem.eventId}`}
+                          label="Přednášející / organizátor"
+                          value={eventForm.details.speaker}
+                          onChange={(event) =>
+                            setEventForm((current) => ({
+                              ...current,
+                              details: { ...current.details, speaker: event.target.value },
+                            }))
+                          }
+                        />
+                        <Input
+                          id={`event-capacity-${eventItem.eventId}`}
+                          label="Kapacita"
+                          type="number"
+                          min="1"
+                          inputMode="numeric"
+                          value={eventForm.details.capacity}
+                          onChange={(event) =>
+                            setEventForm((current) => ({
+                              ...current,
+                              details: { ...current.details, capacity: event.target.value },
+                            }))
+                          }
+                        />
+                        <Input
+                          id={`event-prize-${eventItem.eventId}`}
+                          label="Cena / odměna"
+                          value={eventForm.details.prize}
+                          onChange={(event) =>
+                            setEventForm((current) => ({
+                              ...current,
+                              details: { ...current.details, prize: event.target.value },
+                            }))
+                          }
+                        />
+                      </div>
                       <Textarea
-                        id={`event-json-${eventItem.eventId}`}
-                        label="Detaily (JSON)"
-                        value={eventForm.detailsJson}
-                        onChange={(event) => setEventForm((current) => ({ ...current, detailsJson: event.target.value }))}
+                        id={`event-agenda-${eventItem.eventId}`}
+                        label="Agenda"
+                        value={eventForm.details.agenda}
+                        onChange={(event) =>
+                          setEventForm((current) => ({
+                            ...current,
+                            details: { ...current.details, agenda: event.target.value },
+                          }))
+                        }
+                        hint="Každý bod napiš na samostatný řádek."
+                      />
+                      <Textarea
+                        id={`event-description-${eventItem.eventId}`}
+                        label="Poznámka"
+                        value={eventForm.details.description}
+                        onChange={(event) =>
+                          setEventForm((current) => ({
+                            ...current,
+                            details: { ...current.details, description: event.target.value },
+                          }))
+                        }
                       />
                       <div className="flex flex-wrap gap-3">
                         <Button type="button" onClick={() => handleEventSave(eventItem.eventId)} disabled={isRowPending}>
@@ -1477,16 +1645,13 @@ export function AdminPanel() {
                           <Badge variant="outline">#{eventItem.eventId}</Badge>
                         </div>
                         <MetaRow label="Datum" value={eventItem.date ? formatDate(eventItem.date) : "Bez termínu"} />
-                        <MetaRow
-                          label="Detaily JSON"
-                          value={
-                            eventItem.detailsJson ? (
-                              <code className="break-all text-xs">{JSON.stringify(eventItem.detailsJson)}</code>
-                            ) : (
-                              "—"
-                            )
-                          }
-                        />
+                        {detailEntries.length > 0 ? (
+                          detailEntries.map((entry) => (
+                            <MetaRow key={`${eventItem.eventId}-${entry.label}`} label={entry.label} value={entry.value} />
+                          ))
+                        ) : (
+                          <MetaRow label="Detaily" value="—" />
+                        )}
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <Button type="button" variant="secondary" size="sm" onClick={() => beginEventEdit(eventItem)}>

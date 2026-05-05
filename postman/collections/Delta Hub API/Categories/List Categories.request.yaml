@@ -1,6 +1,0 @@
-$kind: http-request
-name: List Categories
-method: GET
-url: '{{baseUrl}}/api/categories'
-order: 1000
-description: 'Seznam všech kategorií, seřazeno abecedně.'

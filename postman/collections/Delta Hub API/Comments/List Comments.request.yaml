@@ -1,6 +1,0 @@
-$kind: http-request
-name: List Comments
-method: GET
-url: '{{baseUrl}}/api/memes/{{memeId}}/comments'
-order: 1000
-description: 'Komentáře k mémo, seřazené od nejstaršího.'

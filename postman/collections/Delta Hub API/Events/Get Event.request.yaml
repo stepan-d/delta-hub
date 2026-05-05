@@ -1,6 +1,0 @@
-$kind: http-request
-name: Get Event
-method: GET
-url: '{{baseUrl}}/api/events/{{eventId}}'
-order: 3000
-description: 'Detail akce. Response 200 nebo 404.'

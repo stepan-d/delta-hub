@@ -1,6 +1,0 @@
-$kind: http-request
-name: Get User
-method: GET
-url: '{{baseUrl}}/api/users/{{userId}}'
-order: 2000
-description: '🔒 Login (vlastní profil nebo Admin). Vrátí detail uživatele.'

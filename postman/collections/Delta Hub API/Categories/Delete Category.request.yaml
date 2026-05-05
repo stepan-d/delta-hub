@@ -1,6 +1,0 @@
-$kind: http-request
-name: Delete Category
-method: DELETE
-url: '{{baseUrl}}/api/categories/{{categoryId}}'
-order: 4000
-description: '🛡️ Admin. Smazání kategorie. Mémům se categoryId nastaví na null. Response 204.'
