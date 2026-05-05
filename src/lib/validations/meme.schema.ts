@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 export const createMemeSchema = z.object({
   title: z.string().min(1).max(200).optional(),
-  imageUrl: z.string().url().max(500),
+  imageUrl: z.string().min(1).max(500),
   categoryId: z.number().int().positive().optional(),
   tags: z.record(z.string(), z.unknown()).optional(),
 })
